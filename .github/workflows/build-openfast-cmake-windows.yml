@@ -1,0 +1,92 @@
+name: build-openfast-cmake-windows
+
+# Experimental, additive-only workflow: builds ONLY the openfast.exe glue-code
+# executable via CMake + Ninja + Intel ifx on Windows, with
+# LOAD_DLL_TWICE_FOR_LOGGING_CHANNELS passed as a compiler flag at configure
+# time. This does NOT modify modules/servodyn/src/BladedInterface.f90 or
+# modules/servodyn/CMakeLists.txt in any way - ServoDyn is built exactly as
+# it exists upstream. The purpose is to test whether the same source that
+# fails to compile via the vs-build/FASTlib.vfproj + devenv path compiles
+# cleanly through CMake's own dependency/interface handling instead.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-openfast-cmake:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Install Intel oneAPI BaseKit (Windows)
+        shell: cmd
+        env:
+          URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7dff44ba-e3af-4448-841c-0d616c8da6e7/w_BaseKit_p_2024.1.0.595_offline.exe
+          COMPONENTS: intel.oneapi.win.mkl.devel
+        run: |
+          curl.exe --output %TEMP%\webimage.exe --url %URL% --retry 5 --retry-delay 5
+          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
+          del %TEMP%\webimage.exe
+          webimage_extracted\bootstrapper.exe -s --action install --components=%COMPONENTS% --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=1 --log-dir=.
+          set installer_exit_code=%ERRORLEVEL%
+          rd /s/q "webimage_extracted"
+          exit /b %installer_exit_code%
+
+      - name: Install Intel oneAPI HPCKit (Windows)
+        shell: cmd
+        env:
+          URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/c95a3b26-fc45-496c-833b-df08b10297b9/w_HPCKit_p_2024.1.0.561_offline.exe
+          COMPONENTS: intel.oneapi.win.ifort-compiler
+        run: |
+          curl.exe --output %TEMP%\webimage.exe --url %URL% --retry 5 --retry-delay 5
+          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
+          del %TEMP%\webimage.exe
+          webimage_extracted\bootstrapper.exe -s --action install --components=%COMPONENTS% --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=1 --log-dir=.
+          set installer_exit_code=%ERRORLEVEL%
+          rd /s/q "webimage_extracted"
+          exit /b %installer_exit_code%
+
+      - name: Install Ninja
+        shell: cmd
+        run: choco install ninja -y
+
+      - name: Configure + Build openfast (CMake + Ninja + ifx)
+        shell: cmd
+        run: |
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 vs2022
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake -E make_directory build
+          cd build
+          cmake -G "Ninja" ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_Fortran_COMPILER=ifx ^
+            -DCMAKE_C_COMPILER=cl ^
+            -DCMAKE_CXX_COMPILER=cl ^
+            -DCMAKE_Fortran_FLAGS="-DLOAD_DLL_TWICE_FOR_LOGGING_CHANNELS" ^
+            -DBLA_VENDOR=Intel10_64lp ^
+            -DDOUBLE_PRECISION=ON ^
+            -DBUILD_FASTFARM=OFF ^
+            -DBUILD_OPENFAST_CPP_API=OFF ^
+            -DBUILD_OPENFAST_CPP_DRIVER=OFF ^
+            -DBUILD_OPENFAST_LIB_DRIVER=OFF ^
+            -DBUILD_OPENFAST_SIMULINK_API=OFF ^
+            -DBUILD_TESTING=OFF ^
+            -DBUILD_DOCUMENTATION=OFF ^
+            -DGENERATE_TYPES=OFF ^
+            ..
+          cmake --build . --target openfast --config Release
+
+      - name: Show result
+        shell: cmd
+        run: |
+          dir /s build\*.exe
+
+      - name: Upload openfast.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: openfast-cmake-windows
+          path: build/**/openfast.exe
