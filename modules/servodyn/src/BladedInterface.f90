@@ -122,11 +122,13 @@ SUBROUTINE CallBladedDLL ( u, p, dll_data, ErrStat, ErrMsg, ChannelNameUnit )
 
 
    if (p%UseLegacyInterface) then
+      CALL WrScr('DEBUG-BISECT E: entered CallBladedDLL, dispatching to CallBladedLegacyDLL')
       if (present(ChannelNameUnit)) then
          call CallBladedLegacyDLL ( u, p, dll_data, ErrStat, ErrMsg, ChannelNameUnit )
       else
          call CallBladedLegacyDLL ( u, p, dll_data, ErrStat, ErrMsg )
       end if
+      CALL WrScr('DEBUG-BISECT F: returned from CallBladedLegacyDLL')
    else
 
       if ( dll_data%SimStatus == GH_DISCON_STATUS_INITIALISING ) then
@@ -203,12 +205,15 @@ SUBROUTINE CallBladedLegacyDLL ( u, p, dll_data, ErrStat, ErrMsg, ChannelNameUni
    accINFILE   = TRANSFER( TRIM(dll_data%DLL_InFile)//C_NULL_CHAR, accINFILE,  LEN_TRIM(dll_data%DLL_InFile)+1 )
    avcMSG      = TRANSFER( C_NULL_CHAR,                            avcMSG,     LEN(ErrMsg)+1 ) !bjj this is intent(out), so we shouldn't have to do this, but, to be safe...
 
+   CALL WrScr('DEBUG-BISECT G: entered CallBladedLegacyDLL, buffers marshalled, about to resolve/call DLL')
 #ifdef STATIC_DLL_LOAD
    ! if we're statically loading the library (i.e., OpenFOAM), we can just call DISCON();
    CALL DISCON( dll_data%avrSWAP, aviFAIL, accINFILE, avcOUTNAME, avcMSG )
 #else
    CALL C_F_PROCPOINTER( p%DLL_Trgt%ProcAddr(1), DLL_Legacy_Subroutine)
+   CALL WrScr('DEBUG-BISECT H: procedure pointer resolved, about to invoke DLL_Legacy_Subroutine')
    CALL DLL_Legacy_Subroutine ( dll_data%avrSWAP, aviFAIL, accINFILE, avcOUTNAME, avcMSG )
+   CALL WrScr('DEBUG-BISECT I: returned from DLL_Legacy_Subroutine')
 #endif
 
    IF ( aviFAIL /= 0 ) THEN
@@ -388,7 +393,9 @@ SUBROUTINE BladedInterface_Init(u, p, m, xd, y, InputFileData, InitInp, StC_Ctrl
 !--------------------------------------
    p%NumOuts_DLL = 0
 #ifdef LOAD_DLL_TWICE_FOR_LOGGING_CHANNELS
+   CALL WrScr('DEBUG-BISECT 1: before GetBladedLoggingChannels')
    CALL GetBladedLoggingChannels(u,p,xd,m, ErrStat2, ErrMsg2) ! this calls the DLL, but we don't have the correct inputs for a time step, so we'll close the DLL and start it again
+   CALL WrScr('DEBUG-BISECT 2: after GetBladedLoggingChannels')
       CALL CheckError(ErrStat2,ErrMsg2)
       IF ( ErrStat >= AbortErrLev ) RETURN
 
@@ -396,11 +403,15 @@ SUBROUTINE BladedInterface_Init(u, p, m, xd, y, InputFileData, InitInp, StC_Ctrl
       ! (if the DLL could be guaranteed to not do anything with the
       !  inputs on the initial step, we could avoid this this part)
 
+   CALL WrScr('DEBUG-BISECT 3: before BladedInterface_End')
    CALL BladedInterface_End(u, p, m, xd, ErrStat2, ErrMsg2)
+   CALL WrScr('DEBUG-BISECT 4: after BladedInterface_End')
       CALL CheckError(ErrStat2,ErrMsg2)
       IF ( ErrStat >= AbortErrLev ) RETURN
 
+   CALL WrScr('DEBUG-BISECT 5: before LoadDynamicLib reload')
    CALL LoadDynamicLib ( p%DLL_Trgt, ErrStat2, ErrMsg2 )
+   CALL WrScr('DEBUG-BISECT 6: after LoadDynamicLib reload')
       CALL CheckError(ErrStat2,ErrMsg2)
       IF ( ErrStat >= AbortErrLev ) RETURN
 #endif
@@ -653,11 +664,15 @@ SUBROUTINE GetBladedLoggingChannels(u,p, xd, m, ErrStat, ErrMsg)
    CHARACTER( p%avcOUTNAME_LEN )                   :: LoggingChannelStr  ! The error message, if an error occurred
    CHARACTER(*), PARAMETER                         :: RoutineName = "GetBladedLoggingChannels"
 
+   CALL WrScr('DEBUG-BISECT A: entered GetBladedLoggingChannels, before Fill_CONTROL_vars')
    CALL Fill_CONTROL_vars( 0.0_DbKi, u, p, LEN(ErrMsg), m%dll_data )
+   CALL WrScr('DEBUG-BISECT B: after Fill_CONTROL_vars')
 
    if (p%UseLegacyInterface) then
 
+      CALL WrScr('DEBUG-BISECT C: before CallBladedDLL (discovery)')
       CALL CallBladedDLL(u, p, m%dll_data, ErrStat, ErrMsg, LoggingChannelStr)
+      CALL WrScr('DEBUG-BISECT D: after CallBladedDLL (discovery)')
          IF ( ErrStat >= AbortErrLev ) RETURN
 
       p%NumOuts_DLL = NINT( m%dll_data%avrSWAP(65) ) ! number of channels returned for logging
