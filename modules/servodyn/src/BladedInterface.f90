@@ -396,7 +396,7 @@ SUBROUTINE BladedInterface_Init(u, p, m, xd, y, InputFileData, InitInp, StC_Ctrl
       ! (if the DLL could be guaranteed to not do anything with the
       !  inputs on the initial step, we could avoid this this part)
 
-   CALL BladedInterface_End(u, p, m, ErrStat2, ErrMsg2)
+   CALL BladedInterface_End(u, p, m, xd, ErrStat2, ErrMsg2)
       CALL CheckError(ErrStat2,ErrMsg2)
       IF ( ErrStat >= AbortErrLev ) RETURN
 
