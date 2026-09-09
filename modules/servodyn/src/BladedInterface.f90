@@ -661,8 +661,10 @@ SUBROUTINE GetBladedLoggingChannels(u,p, xd, m, ErrStat, ErrMsg)
    INTEGER(IntKi)                                  :: Indx               ! index used to parse name/unit from Bladed DLL
    INTEGER(IntKi)                                  :: i                  ! The error status code
    INTEGER(IntKi)                                  :: ErrStat2           ! The error status code
-   CHARACTER( p%avcOUTNAME_LEN )                   :: LoggingChannelStr  ! The error message, if an error occurred
+   CHARACTER(:), ALLOCATABLE                       :: LoggingChannelStr  ! heap-allocated (not stack) - can be several KB (MaxLoggingChannels*2*(1+ChanLen)+1) and a single large stack local this deep in the init call chain can overrun the stack
    CHARACTER(*), PARAMETER                         :: RoutineName = "GetBladedLoggingChannels"
+
+   ALLOCATE( CHARACTER(p%avcOUTNAME_LEN) :: LoggingChannelStr )
 
    CALL WrScr('DEBUG-BISECT A: entered GetBladedLoggingChannels, before Fill_CONTROL_vars')
    CALL Fill_CONTROL_vars( 0.0_DbKi, u, p, LEN(ErrMsg), m%dll_data )
